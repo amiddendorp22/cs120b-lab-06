@@ -1,4 +1,4 @@
-/*	Author: lab
+/*	Author: amidd001
  *  Partner(s) Name: 
  *	Lab Section:
  *	Assignment: Lab #  Exercise #
@@ -13,9 +13,7 @@
 #include "simAVRHeader.h"
 #endif
 
-
 volatile unsigned char TimerFlag = 0;
-
 unsigned long _avr_timer_M = 1;
 unsigned long _avr_timer_cntcurr = 0;
 
@@ -28,12 +26,10 @@ void TimerOn()
 	_avr_timer_cntcurr = _avr_timer_M;
 	SREG |= 0x80;
 }
-
 void TimerOff()
 {
 	TCCR1B = 0x00;
 }
-
 void TimerISR()
 {
 	TimerFlag = 1;
@@ -55,149 +51,165 @@ void TimerSet(unsigned long M)
 	_avr_timer_cntcurr = _avr_timer_M;
 }
 
+enum SM_States {SM_Init, SM_PA0, SM_PA1, SM_Both, SM_None} SM_State;
 
-enum BL_States {BL_Init, BL_One, BL_Two, BL_Three, BL_Wait, BL_Back1, BL_Back0, BL_Wait2} BL_STATE;
-
-void TickFct_Blink()
+void TickFct_Press()
 {
-	unsigned char tmpA = ~PINA;
-	switch(BL_STATE)
+	unsigned char tmpA = ~PINA & 0x03;
+	unsigned char increaseHeld = 0x00;
+	unsigned char decreaseHeld = 0x00;
+	switch(SM_State)
 	{
-		case(BL_Init):
-			if(tmpA == 0x01)
+		unsigned char tmpA = ~PINA & 0x03;
+		case(SM_Init):
+			if(tmpA == 0x00)
 			{
-				BL_STATE = BL_Wait; //stays in the state
+				SM_State = SM_None;
 			}
-			else
+			else if(tmpA == 0x01)
 			{
-				BL_STATE = BL_One;
+				SM_State = SM_PA0;
 			}
-			break;
-		case(BL_One):
-			if(tmpA == 0x01)
+			else if(tmpA == 0x02)
 			{
-				BL_STATE = BL_Wait; //stays in the state
+				SM_State = SM_PA1;
 			}
-			else
+			else if(tmpA == 0x03)
 			{
-				BL_STATE = BL_Two;
-			}
-			break;
-		case(BL_Two):
-			if(tmpA == 0x01)
-			{
-				BL_STATE = BL_Wait; //stays in the state
-			}
-			else
-			{
-				BL_STATE = BL_Three;
+				SM_State = SM_Both;
 			}
 			break;
-		case(BL_Three):
-			if(tmpA == 0x01)
+		case(SM_PA0):
+			if(tmpA == 0x00)
 			{
-				BL_STATE = BL_Wait;
+				SM_State = SM_None;
 			}
-			else
+			else if(tmpA == 0x01)
 			{
-				BL_STATE = BL_Back1;
+				increaseHeld = 0x01;
 			}
-			break;
-		case(BL_Back1):
-			if(tmpA == 0x01)
+			else if(tmpA == 0x02)
 			{
-				BL_STATE = BL_Wait;
+				SM_State = SM_PA1;
 			}
-			else
+			else if(tmpA == 0x03)
 			{
-				BL_STATE = BL_Back0;
+				SM_State = SM_Both;
 			}
 			break;
-		case(BL_Back0):
-			if(tmpA == 0x01)
-			{
-				BL_STATE = BL_Wait;
-			}
-			else
-			{
-				BL_STATE = BL_Two;
-			}
+		case(SM_PA1):
+			if(tmpA == 0x00)
+                        {
+                                SM_State = SM_None;
+                        }
+                        else if(tmpA == 0x01)
+                        {
+                                SM_State = SM_PA0;
+                        }
+                        else if(tmpA == 0x02)
+                        {
+				decreaseHeld = 0x01;
+                        }
+                        else if(tmpA == 0x03)
+                        {
+                                SM_State = SM_Both;
+                        }
 			break;
-		case(BL_Wait):
-			BL_STATE = BL_Wait2;
+		case(SM_Both):
+			if(tmpA == 0x00)
+                        {
+                                SM_State = SM_None;
+                        }
+                        else if(tmpA == 0x01)
+                        {
+                                SM_State = SM_PA0;
+                        }
+                        else if(tmpA == 0x02)
+                        {
+                                SM_State = SM_PA1;
+                        }
+                        else if(tmpA == 0x03)
+                        {
+                                SM_State = SM_Both;
+                        }
 			break;
-		case(BL_Wait2):
-			if(tmpA == 0x01)
-			{
-				BL_STATE = BL_One;
-			}
-			else
-			{
-				BL_STATE = BL_Wait2;
-			}
-		default:
+		case(SM_None):
+			if(tmpA == 0x00)
+                        {
+                                SM_State = SM_None;
+                        }
+                        else if(tmpA == 0x01)
+                        {
+                                SM_State = SM_PA0;
+                        }
+                        else if(tmpA == 0x02)
+                        {
+                                SM_State = SM_PA1;
+                        }
+                        else if(tmpA == 0x03)
+                        {
+                                SM_State = SM_Both;
+                        }
 			break;
 
 	}
 
-	switch(BL_STATE)
+	switch(SM_State)
 	{
-		case(BL_Init):
-			PORTB = 0x01; //PB0
+		case(SM_Init):
+			PORTC = 0x07;
 			break;
-		case(BL_One):
-			PORTB = 0x01; //PB0
+		case(SM_PA0):
+			decreaseHeld = 0x00;
+			if(increaseHeld == 0x00)
+			{
+				if(PORTC < 0x09)
+				{
+					PORTC = PORTC + 0x01;
+				}
+			}
+			//while(tmpA == 0x01); //pauses the state machine
 			break;
-		case(BL_Two):
-			PORTB = 0x02; //PB1
+		case(SM_PA1):
+			increaseHeld = 0x00;
+			if(decreaseHeld == 0x00)
+			{
+				if(PORTC > 0x00)
+				{
+					PORTC = PORTC - 0x01;
+				}
+			}
+			//while(tmpA == 0x02); //pauses the state machine
 			break;
-		case(BL_Three):
-			PORTB = 0x04; //PB2
-		     	break;
-		case(BL_Back1):
-			PORTB = 0x02; //PB1;
+		case(SM_Both):
+			PORTC = 0x00;
 			break;
-		case(BL_Back0):
-			PORTB = 0x01; //PB0
+		case(SM_None):
+			increaseHeld = 0x00;
+			decreaseHeld = 0x00;
 			break;
-		case(BL_Wait):
-			break;
-		case(BL_Wait2):
-			break;
-		default:
-			break;
+
 	}
 }
 
-
 int main(void) {
     /* Insert DDR and PORT initializations */
-	DDRA = 0x00; PINA = 0xFF;
-	DDRB = 0xFF; PORTB = 0x00;
-	TimerSet(300);
-	TimerOn();
-	unsigned char tmpB = 0x00;
-	PORTB = 0x00;
-	BL_STATE = BL_Init;
+    DDRA = 0x00; PORTA = 0xFF; //sets PINA as input
+    DDRB = 0xFF; PORTB = 0x00; //sets PORTB as output
+    DDRC = 0xFF; PORTC = 0x00; //sets PORTC as output
     /* Insert your solution below */
-    while (1)
-    {
-	   unsigned char tmpA = ~PINA;
-	   /*
-	   if(tmpA == 0x01)
-	   {
-		while(!TimerFlag);
-		TimerFlag = 0;
-		while(tmpA != 0x01)
-		{
-			while(!TimerFlag);
-			TimerFlag = 0;
-		}
-	   }
-	   */
-	   TickFct_Blink();
-	   while(!TimerFlag);
-	   TimerFlag = 0;
+    SM_State = SM_Init;
+    PORTB = 0x07;
+    TimerSet(100);
+    TimerOn();
+    unsigned char incrementPressed = 0x00;
+    unsigned char decrementPressed = 0x00;
+  //  unsigned char tmpA;
+    while (1) {
+//	tmpA = ~PINA & 0x03;
+	TickFct_Press();
+	while(!TimerFlag);
+	TimerFlag = 0;
     }
     return 1;
 }
